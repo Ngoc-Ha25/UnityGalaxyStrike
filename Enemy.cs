@@ -1,111 +1,76 @@
-using UnityEngine;
-using System.Collections;
-// using UnityEngine.SocialPlatforms.Impl;
-using UnityEngine.Playables; // Add this import
-// using UnityEngine.Timeline;
+﻿using UnityEngine;
 
-public class Enemy : MonoBehaviour
+public class EnemyHealth : MonoBehaviour
 {
-    [SerializeField] int health = 10;
-    [SerializeField] GameObject deathVFX;
-    [SerializeField] float deletionDelay = 1f;
-    [SerializeField] float gravityMultiplier = 2f;
-    [SerializeField] float flashDuration = 0.15f;
-    
+    public float speed = 5f;
     private Rigidbody rb;
-    private bool inDeathSequence = false;
-    
-    [SerializeField] private MeshRenderer meshRenderer;
-    private Shader originalShader;
-    [SerializeField] private Shader flashShader;
-    
-    // We'll store the current flash coroutine here
-    private Coroutine flashRoutine;
-    
-    Scoreboard scoreboard;
-    [SerializeField] int scoreValue = 10;
+    public float maxHealth = 50f;
+    private float currentHealth;
 
-    private void Awake()
+    public Transform player;
+    public GameObject explosionEffect; // prefab hiệu ứng nổ
+    public float damageToPlayer = 20f; // sát thương gây cho player
+
+    void Start()
     {
-        scoreboard = FindFirstObjectByType<Scoreboard>();
+        currentHealth = maxHealth;
 
-        rb = GetComponent<Rigidbody>();        
+        rb = GetComponent<Rigidbody>();
+        if (rb == null)
+        {
+            rb = gameObject.AddComponent<Rigidbody>();
+        }
         rb.useGravity = false;
-        
-        if (meshRenderer != null)
-        {
-            originalShader = meshRenderer.material.shader;
-        }
-    }
-    
-    private void FixedUpdate()
-    {
-        if (inDeathSequence)
-        {
-            rb.AddForce(Physics.gravity * rb.mass * gravityMultiplier);
-        }
+        rb.isKinematic = false;
     }
 
-    void OnParticleCollision(GameObject other)
+    public void TakeDamage(float amount)
     {
-        TakeDamage();
-    }
+        currentHealth -= amount;
+        Debug.Log("Enemy took damage, current health: " + currentHealth);
 
-    private void TakeDamage()
-    {
-        if (!inDeathSequence && health > 0)
+        if (currentHealth <= 0f)
         {
-            // Refresh the flash each time we're hit
-            if (flashRoutine != null)
-            {
-                StopCoroutine(flashRoutine);
-            }
-            flashRoutine = StartCoroutine(FlashWhiteCoroutine());
-        }
-
-        health--;
-
-        if (health <= 0 && !inDeathSequence)
-        {
-            inDeathSequence = true;
-            rb.useGravity = true;
-            scoreboard.IncreaseScore(scoreValue);
-
-            // Disable Playable Director component at the top-most parent game object
-            PlayableDirector director = GetComponentInParent<PlayableDirector>();
-            if (director != null)
-            {
-                director.enabled = false;
-            }
-
-            GameObject vfx = Instantiate(deathVFX, transform.position, Quaternion.identity);
-            vfx.transform.parent = transform;
-            StartCoroutine(DetachAndDestroy(vfx));
+            Die();
         }
     }
 
-    private IEnumerator FlashWhiteCoroutine()
+    void Die()
     {
-        if (meshRenderer == null) yield break;
-
-        // Change material to flash shader
-        meshRenderer.material.shader = flashShader;
-        yield return new WaitForSeconds(flashDuration);
-
-        // Revert to original shader
-        meshRenderer.material.shader = originalShader;
-        flashRoutine = null; // Reset our reference
-    }
-
-    private IEnumerator DetachAndDestroy(GameObject vfx)
-    {
-        yield return new WaitForSeconds(deletionDelay);
-        
-        if (vfx != null)
-        {
-            vfx.transform.parent = null;
-        }
-        
+        Explode();
         Destroy(gameObject);
+    }
+
+    void Update()
+    {
+        if (player != null)
+        {
+            Vector3 direction = (player.position - transform.position).normalized;
+            rb.linearVelocity = direction * speed;   // dùng velocity
+            transform.forward = direction;
+        }
+    }
+
+    void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            PhiThuyen1 ship = collision.gameObject.GetComponent<PhiThuyen1>();
+            if (ship != null)
+            {
+                ship.TakeDamage(damageToPlayer);
+            }
+
+            Explode();
+            Destroy(gameObject);
+        }
+    }
+
+    void Explode()
+    {
+        if (explosionEffect != null)
+        {
+            Instantiate(explosionEffect, transform.position, Quaternion.identity);
+        }
     }
 }
